@@ -1,0 +1,3 @@
+[submodule "externals/kmeans_anchor_boxes"]
+	path = externals/kmeans_anchor_boxes
+	url = https://github.com/lars76/kmeans-anchor-boxes.git
