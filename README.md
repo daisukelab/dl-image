@@ -2,8 +2,9 @@
 
 This repository is continuously updating to provide aggregated information for real-world application for following goals:
 
-- Image Classication
-- Object Detection
+- clf: Image Classication
+- od: Object Detection
+- imagenet: Imagenet
 - (TBD) Identity Verification
 - (TBD) Pose Tracking
 - (TBD) Semantic Segmentation
