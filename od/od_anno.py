@@ -1,9 +1,12 @@
+"""
+Object Detection Annotation Utilities
+"""
+
 from dlcliche.utils import *
 from dlcliche.image import *
-from PIL import Image
 import collections
 
-logger = get_logger()
+logger = get_logger(Path(__file__).stem)
 
 class Dataset(object):
     """Similar definition with pytorch."""
@@ -18,7 +21,8 @@ class Dataset(object):
     def __len__(self):
         return len(self.X)
 
-class ODAnnoDataset(Dataset):
+class ODDataset(Dataset):
+    """Object detector dataset class."""
     def __init__(self, X, y, classes, path=''):
         super().__init__(X, y)
         self.classes, self.path = classes, Path(path)
@@ -46,24 +50,25 @@ class ODAnnoDataset(Dataset):
     def label(y): return np.argmax(y[4:]) if 1 < len(y[4:]) else int(y[4:])
 
 class ODAnno(object):
-    """Annotation dataset.
+    """Object Detector Annotation class.
     
     # Basic design
     - Has a data frame object to hold annotations.
     - Has a csv filename to hold filename for annotation file.
     
-    # Cautions
+    # Caution
+    - Only __training data__ is handled so far.
     - Filenames stored in anno_df.File could have simple filename or relative path.
-    - Subset have a single image folder, whatever split images belongs to. 
+    - Subset have a single image folder, whatever split images belongs to.
     """
 
     def __init__(self, anno_csv, image_folder, anno_df=None):
         """ODAnno constructor.
 
         Arguments:
-            anno_csv: Path name for 'annotations.csv', or None if you use dataframe only.
+            anno_csv: Path name for 'annotations.csv', or None if you use DataFrame only.
             image_folder: Folder path name where images are stored.
-            anno_df: DataFrame that have ODAnno info in advance.
+            anno_df: DataFrame that have ODAnno database in advance.
         """
         self.anno_csv, self.image_folder = anno_csv, Path(image_folder)
         self.anno_df = pd.read_csv(anno_csv) if anno_df is None else anno_df
@@ -72,18 +77,24 @@ class ODAnno(object):
     def __len__(self):
         return len(self.anno_df)
 
+    def __getitem__(self, index):
+        return self.anno_df[index]
+    
     def _reset_classes(self):
         self.classes = sorted(list(set(self.anno_df.Label)))
 
     def save(self):
+        """Save current database."""
         self.anno_df.to_csv(self.anno_csv, index=False)
 
     def save_as(self, filename):
+        """Save current database as new file name.
+        New file name will be used as anno_csv database file later on."""
         self.anno_csv = filename
         self.save()
 
     def _set_size(self):
-        """Set column 'Size' if not there."""
+        """Set column 'Size' if not set before."""
         if 'Size' in self.anno_df.columns: return
         w_label = (self.anno_df.XMax - self.anno_df.XMin).values
         h_label = (self.anno_df.YMax - self.anno_df.YMin).values
@@ -123,25 +134,34 @@ class ODAnno(object):
         self._reset_classes()
         return self
 
-    def __files(self, df=None):
+    def _files(self, df=None):
+        """Make a list of image file names that can be used to open them."""
         if df is None: df = self.anno_df
         return [str(self.image_folder/f) for f in df.File]
 
-    def _coco_df(self):
+    def _coco_df(self, df=None):
         """Convert to MS COCO format."""
-        df, outdf = self.anno_df, pd.DataFrame()
-        outdf['File'] = self.__files(df)
-        outdf['Label'] = df.Label
-        outdf['w'] = (df.XMax - df.XMin) * df.Width
-        outdf['h'] = (df.YMax - df.YMin) * df.Height
-        outdf['x'] = df.XMin * df.Width
-        outdf['y'] = df.YMin * df.Height
+        df = self.anno_df if df is None else df
+        outdf = pd.DataFrame()
+        outdf['File'] = self._files(df)
+        outdf['Label'] = df.Label.values
+        outdf['w'] = (df.XMax.values - df.XMin.values) * df.Width.values
+        outdf['h'] = (df.YMax.values - df.YMin.values) * df.Height.values
+        outdf['x'] = df.XMin.values * df.Width.values
+        outdf['y'] = df.YMin.values * df.Height.values
+        outdf['Rotation'] = df.Rotation.values
         return outdf
 
-    def dataset(self, one_hot=False):
+    def dataset(self, df=None, one_hot=False):
+        """Create ODDataset instance.
+        
+        # Arguments
+            df: Alternative annotation database to be used.
+            one_hot: If True, dataset label will have one-hot expression.
+        """
         def or_one_hot(cls):
             return np.eye(len(self.classes))[cls] if one_hot else cls
-        groups = self._coco_df().groupby('File')
+        groups = self._coco_df(df).groupby('File')
         X, y = [], []
         for filename, df in groups:
             _y = np.array([np.r_[r[['x', 'y', 'w', 'h']].values,
@@ -149,17 +169,16 @@ class ODAnno(object):
                                  for _, r in df.iterrows()])
             X.append(filename)
             y.append(_y)
-        return ODAnnoDataset(X, y, classes=self.classes, path='')
+        return ODDataset(X, y, classes=self.classes, path='')
 
 
     @staticmethod
-    def from_google_open_image_v4(anno_csv, open_image_folder):
-        """Convert OpenImage V4 dataset annotation, save it,
-        then generate annotation instance.
-
-        CAUTION: Takes 2 hours or so.
+    def from_google_open_images_v4(anno_csv, open_image_folder):
+        """Convert Open Images Dataset V4 annotation,
+        save as single file, then generate annotation instance.
         """
 
+        open_image_folder = str(open_image_folder)
         OIDPATH = Path(open_image_folder)
         annos = df_load_excel_like(OIDPATH/'train-annotations-bbox.csv')
         class_descs = pd.read_csv(OIDPATH/'class-descriptions-boxable.csv', header=None)
@@ -169,27 +188,57 @@ class ODAnno(object):
         annos['Label'] = annos['LabelName'].apply(lambda x:label_id2name[x])
         annos['Split'] = 'train'
         # Make filenames
-        annos['File'] = annos.ImageID.apply(lambda x: str(Path('train/'+x).with_suffix('.jpg')))
-        # Get image size
-        sizes = np.array([Image.open(OIDPATH/filename).size for filename in annos.File])
-        annos['Width'] = sizes[:, 0]
-        annos['Height'] = sizes[:, 1]
+        annos['File'] = annos.ImageID.apply(lambda x: 'train/'+x+'.jpg')
+        # Get image shape & rotation
+        df = df_load_excel_like(OIDPATH/'train-images-boxable-with-rotation.csv').sort_values(by='ImageID')
+        files = df.ImageID.apply(lambda x: open_image_folder+'/train/'+x+'.jpg')
+        logger.info(f'Reading shape from {len(files)} files...')
+        shapes = read_file_shapes(files)
+        src_whr = np.c_[shapes, df.Rotation.values]
+        w_h_r = np.zeros((len(annos), 3))
+        image_ids = list(df.ImageID)
+        annos_ids = list(annos.ImageID)
+        src_idx = 0
+        for i in tqdm.tqdm(range(len(annos)), total=len(annos)):
+            while annos_ids[i] != image_ids[src_idx]:
+                src_idx += 1
+                if len(shapes) <= src_idx:
+                    logger.error(f'ImageID {anno_ids[i]} not match.')
+                    raise ValueError(f'ImageID {anno_ids[i]} not match.')
+            w_h_r[i, :] = src_whr[src_idx]
+        annos['Width'] = w_h_r[:, 0]
+        annos['Height'] = w_h_r[:, 1]
+        annos['Rotation'] = w_h_r[:, 2]
         # Make final dataframe & return it
-        od_anno_df = annos[['ImageID', 'File', 'Label', 'XMin', 'XMax', 'YMin', 'YMax', 'Width', 'Height', 'Split']]
+        od_anno_df = annos[['ImageID', 'File', 'Label', 'XMin', 'XMax', 'YMin', 'YMax',
+                            'Width', 'Height', 'Rotation', 'Split']]
         # Make instance and save.
         anno = ODAnno(anno_csv, open_image_folder, anno_df=od_anno_df)
         anno.save()
+        logger.info(f'Created {anno_csv}.')
         return anno
 
     def filter_google_open_image_v4_confident_only_(self, open_image_folder):
+        raise Exception('Not implemented, followings are wrong. This will be classification label getter.')
         df = df_load_excel_like(Path(open_image_folder)/'train-annotations-human-imagelabels-boxable.csv')
-        confident_imageids = df[df.Confidence != '0'].index
-        self.anno_df = self.anno_df[self.anno_df.index.isin(confident_imageids)]
+        confident_labels = df[df.Confidence != '0'].index
+        self.anno_df = self.anno_df[self.anno_df.index.isin(confident_labels)]
 
     def brew_subset(self, new_anno_csv, dest_folder=None, resize_shape=None):
+        """Brew subset of original dataset.
+        - Create destination folder.
+        - Make resized copy of images under the folder.
+        - Make a new annotation database CSV file.
+        - Renew instance with new database.
+        
+        # Arguments
+            new_anno_csv: New annotation database CSV file name.
+            dest_folder: Destination folder. New folder/image copies will not be created if this is None.
+            resize_shape: Shape (width, height) of image copies. Will not be resized if this is None.
+        """
         # Make list of files, then check parent folder consistency.
         dest_folder = Path(dest_folder)
-        files = self.__files()
+        files = self._files()
         # Resize and make all copies.
         if dest_folder is not None:
             if resize_image_files(dest_folder=dest_folder,
@@ -208,7 +257,11 @@ class ODAnno(object):
 
     def build_score_df_sorted(self, label_weight):
         """Build score of annotation per image as a dataframe.
-        This score is for selecting samples for your porpose.
+        This score is for selecting samples for each application porpose.
+        
+        # Scores
+            raw_score: How much labels you interested are included in each images.
+            normalized_score: How _even_, labels you interested are in.
         """
         # Prepare data frames
         boxes = self.anno_df[self.anno_df.Label.isin(label_weight.keys())]
