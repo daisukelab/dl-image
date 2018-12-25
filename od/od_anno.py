@@ -106,6 +106,12 @@ class ODAnno(object):
         self._reset_classes()
         return self
 
+    def filter_by_id_(self, id_list):
+        """Extract labels that are belonging to listed ImageID."""
+        id_list = list(id_list)
+        self.anno_df = self.anno_df[self.anno_df.ImageID.isin(id_list)]
+        return self
+
     def filter_by_size_(self, thresh_min=None, thresh_max=None):
         """Filter by label size (volume).
         Size is simply width x hight. Both width and height are in range [0, 1].
