@@ -21,7 +21,36 @@ class Dataset(object):
     def __len__(self):
         return len(self.X)
 
-class ODDataset(Dataset):
+class DatasetEx(Dataset):
+    """Dataset extended."""
+    def copy(self, indexes=None):
+        """Make a copy or subset copy."""
+        _X = self.X if indexes is None else self.X[indexes]
+        _y = self.y if indexes is None else self.y[indexes]
+        return ODDataset(_X, _y, self.classes, self.path)
+
+    def train_test_split(self, test_size, shuffle=True):
+        """Split dataset into two by test_size split.
+        If test_size is 1 <= size, len(test) will be test_size.
+        If test_size is in range 0 < size < 1, split will be ratio basis.
+
+        # Returns
+            training dataset, test dataset
+        """
+        import random
+        idxes = list(range(len(self)))
+        if shuffle: random.shuffle(idxes)
+
+        if 1 <= test_size:
+            test_size = int(test_size)
+        elif 0 < test_size:
+            test_size = int(len(self) * test_size)
+        else:
+            raise ValueError(f'Invalid test_size = {test_size}')
+
+        return self.copy(idxes[:-test_size]), self.copy(idxes[-test_size:])
+
+class ODDataset(DatasetEx):
     """Object detector dataset class."""
     def __init__(self, X, y, classes, path=''):
         super().__init__(X, y)
@@ -48,6 +77,14 @@ class ODDataset(Dataset):
     def bbox(y): return y[:4]
     @staticmethod
     def label(y): return np.argmax(y[4:]) if 1 < len(y[4:]) else int(y[4:])
+    @staticmethod
+    def bx(y): return y[0]
+    @staticmethod
+    def by(y): return y[1]
+    @staticmethod
+    def bw(y): return y[2]
+    @staticmethod
+    def bh(y): return y[3]
 
 class ODAnno(object):
     """Object Detector Annotation class.
