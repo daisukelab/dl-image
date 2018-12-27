@@ -38,7 +38,7 @@ def make_training_files(dest_folder, odds, test_size):
                      for _y in ds.y[idx]]
             with open(filename, 'w') as f:
                 f.write('\n'.join(annos)+'\n')
-            filenames.append(filename)        
+            filenames.append(str(Path(filename).absolute()))
         with open(gt_filename, 'w') as f:
             f.write('\n'.join(filenames)+'\n')
 
@@ -50,7 +50,8 @@ def make_training_files(dest_folder, odds, test_size):
                                        dest_folder/'labels')
         # Write img_{target}.txt
         with open(dest_folder/f'img_{target}.txt', 'w') as f:
-            f.write('\n'.join(ds.X)+'\n')
+            abs_files = [str(Path(f).absolute()) for f in ds.X]
+            f.write('\n'.join(abs_files)+'\n')
 
     # 
     _squeeze_det_keras_norm_classes(odds)
