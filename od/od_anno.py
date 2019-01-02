@@ -222,9 +222,9 @@ class ODAnno(object):
         """
 
         open_image_folder = str(open_image_folder)
-        OIDPATH = Path(open_image_folder)
-        annos = df_load_excel_like(OIDPATH/'train-annotations-bbox.csv')
-        class_descs = pd.read_csv(OIDPATH/'class-descriptions-boxable.csv', header=None)
+        OIDV4 = Path(open_image_folder)
+        annos = df_load_excel_like(OIDV4/'train-annotations-bbox.csv')
+        class_descs = pd.read_csv(OIDV4/'class-descriptions-boxable.csv', header=None)
         class_descs.columns = ['id', 'name']
         # Convert label id to name
         label_id2name = pd.Series(class_descs.name.values, index=class_descs.id).to_dict()
@@ -233,7 +233,7 @@ class ODAnno(object):
         # Make filenames
         annos['File'] = annos.ImageID.apply(lambda x: 'train/'+x+'.jpg')
         # Get image shape & rotation
-        df = df_load_excel_like(OIDPATH/'train-images-boxable-with-rotation.csv').sort_values(by='ImageID')
+        df = df_load_excel_like(OIDV4/'train-images-boxable-with-rotation.csv').sort_values(by='ImageID')
         files = df.ImageID.apply(lambda x: open_image_folder+'/train/'+x+'.jpg')
         logger.info(f'Reading shape from {len(files)} files...')
         shapes = read_file_shapes(files)
@@ -254,7 +254,8 @@ class ODAnno(object):
         annos['Rotation'] = w_h_r[:, 2]
         # Make final dataframe & return it
         od_anno_df = annos[['ImageID', 'File', 'Label', 'XMin', 'XMax', 'YMin', 'YMax',
-                            'Width', 'Height', 'Rotation', 'Split']]
+                            'Width', 'Height', 'Rotation', 'Split',
+                            'IsOccluded', 'IsTruncated', 'IsGroupOf', 'IsDepiction', 'IsInside']]
         # Make instance and save.
         anno = ODAnno(anno_csv, open_image_folder, anno_df=od_anno_df)
         anno.save()

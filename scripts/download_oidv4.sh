@@ -11,6 +11,8 @@ wget https://storage.googleapis.com/openimages/2018_04/train/train-images-boxabl
 wget https://storage.googleapis.com/openimages/2018_04/validation/validation-images-with-rotation.csv
 wget https://storage.googleapis.com/openimages/2018_04/test/test-images-with-rotation.csv
 wget https://storage.googleapis.com/openimages/2018_04/class-descriptions-boxable.csv
+wget https://storage.googleapis.com/openimages/2018_04/train/train-image-ids-with-human-parts-and-mammal-boxes.txt
+wget https://storage.googleapis.com/openimages/2018_04/class-ids-human-body-parts-and-mammal.txt
 echo Done.
 
 echo Downloading images ** This is not fully confirmed. We appreciate if you find any issues. **

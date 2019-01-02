@@ -14,6 +14,6 @@ parser.add_argument('csv_file')
 parser.add_argument('OIDV4_folder')
 args = parser.parse_args()
 
-print(f'Making database for Open Images Dataset V4 as {args.csv_file}. * will be 1.6G bytes long.')
+print(f'Making database for Open Images Dataset V4 as {args.csv_file}. * will be 1.8G bytes long.')
 print(f'Reading annotations from {args.OIDV4_folder}...')
 ODAnno.from_google_open_images_v4(args.csv_file, args.OIDV4_folder)
